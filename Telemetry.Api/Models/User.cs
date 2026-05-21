@@ -10,5 +10,5 @@ public class User
     // Navigation
     public UserCredential? UserCredential { get; set; }
     public List<UserMission> UserMissions { get; set; } = [];
-    public List<TelemetryEvent> TelemetryEvents { get; set; } = [];
+    public List<TelemetryEvent> AssignedEvents { get; set; } = [];
 }

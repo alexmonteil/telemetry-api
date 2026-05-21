@@ -8,6 +8,13 @@ public class UserEntityTypeConfiguration : IEntityTypeConfiguration<User>
         builder
             .HasKey(u => u.Id);
 
+        // User - UserCredential Relationship: One to One
+        builder
+            .HasOne(u => u.UserCredential)
+            .WithOne(uc => uc.User)
+            .HasForeignKey<UserCredential>(uc => uc.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder
             .Property(u => u.Username)
             .IsRequired()
