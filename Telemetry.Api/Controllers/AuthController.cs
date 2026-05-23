@@ -1,0 +1,138 @@
+using System.ComponentModel.DataAnnotations;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using BC = BCrypt.Net.BCrypt;
+
+[ApiController]
+[Route("api/[controller]")]
+public class AuthController : ControllerBase
+{
+    private readonly IConfiguration _config;
+    private readonly TelemetryDbContext _context;
+
+    public AuthController(IConfiguration config, TelemetryDbContext context)
+    {
+        _config = config;
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+    }
+
+    [HttpPost("register")]
+    public async Task<ActionResult<RegistrationResponse>> Register([FromBody] RegisterRequest req)
+    {
+        var normalizedEmail = req.Email.Trim().ToLower();
+        var normalizedUsername = req.Username.Trim().ToLower();
+
+        // Check if user exists
+        var userExists = await _context.Users.AnyAsync(u => u.Email == normalizedEmail || u.Username == normalizedUsername);
+
+        if (userExists)
+        {
+            return Conflict("Username or Email is already in use.");
+        }
+
+        var passwordHash = BC.HashPassword(req.Password);
+        var emailVerificationToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+
+        var newUser = new User
+        {
+            Username = normalizedUsername,
+            Email = normalizedEmail,
+            IsEmailVerified = false
+        };
+
+        var newCredential = new UserCredential
+        {
+            PasswordHash = passwordHash,
+            VerifyToken = emailVerificationToken,
+            VerifyTokenExpiration = DateTime.UtcNow.AddHours(24)
+        };
+
+        newUser.UserCredential = newCredential;
+
+        _context.Users.Add(newUser);
+        await _context.SaveChangesAsync();
+
+        // SETUP EMAIL SERVICE TO EMAIL Verification token
+
+        return CreatedAtAction(
+            nameof(Register),
+            new {id = newUser.Id },
+            new RegistrationResponse
+            {
+                UserId = newUser.Id,
+                Username = newUser.Username,
+                Email = newUser.Email,
+                Message = "Registration successful! Please check your inbox to verify your email before logging in."
+            }
+        );
+    }
+
+    [HttpPost("login")]
+    public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest req)
+    {
+        var normalizedEmail = req.Email.Trim().ToLower();
+        const string invalidCredentialsMsg = "Invalid credentials provided.";
+
+        // Check if user and credentials exist
+        var user = await _context.Users
+                    .Include(u => u.UserCredential)
+                    .FirstOrDefaultAsync(u => u.Email == normalizedEmail);
+        
+        if (user == null || user.UserCredential == null)
+        {
+            return Unauthorized(invalidCredentialsMsg);
+        }
+
+        // Check if password is valid
+        var isPasswordValid = BC.Verify(req.Password, user.UserCredential.PasswordHash);
+        if (!isPasswordValid)
+        {
+            return BadRequest(invalidCredentialsMsg);
+        }
+
+        // Check if user is verified
+        if (!user.IsEmailVerified)
+        {
+            return BadRequest("Account is unverified. Please check your inbox for the activation link.");
+        }
+
+        // Validation fully passed => Generate mint token
+        var token = GenerateJwtToken(user);
+        var authResponse = new AuthResponse
+        {
+            Token = token,
+            Username = user.Username,
+            Email = user.Email
+        };
+        
+        return Ok(authResponse);
+    }
+
+    private string GenerateJwtToken(User user)
+    {
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.Email, user.Email)
+        };
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["JWT_SECRET_KEY"]!));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: _config["JWT_ISSUER"],
+            audience: _config["JWT_AUDIENCE"],
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(2),
+            signingCredentials: creds
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+}
