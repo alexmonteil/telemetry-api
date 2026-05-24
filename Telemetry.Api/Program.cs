@@ -1,7 +1,9 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
 using System.Text;
+
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+
 using Serilog;
 
 DotNetEnv.Env.Load();
@@ -70,7 +72,7 @@ try
 
     var app = builder.Build();
 
-    // 🚀 TWEAK 1: Clean up internal HTTP logging noise (Place BEFORE controller mapping)
+    // TWEAK 1: Clean up internal HTTP logging noise (Place BEFORE controller mapping)
     app.UseSerilogRequestLogging();
 
     if (app.Environment.IsDevelopment())
@@ -91,6 +93,6 @@ catch (Exception ex)
 }
 finally
 {
-    // 🚀 TWEAK 2: Forces Serilog to dump remaining memory streams to disk before app dies
+    // TWEAK 2: Forces Serilog to dump remaining memory streams to disk before app dies
     Log.CloseAndFlush();
 }
