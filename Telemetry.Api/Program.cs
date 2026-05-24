@@ -2,71 +2,95 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Serilog;
 
 DotNetEnv.Env.Load();
 
-var builder = WebApplication.CreateBuilder(args);
+// 1. Initialize Logger Early
+Log.Logger = new LoggerConfiguration()
+        .MinimumLevel.Debug()
+        .WriteTo.Console()
+        .WriteTo.File("Logs/log.txt", rollingInterval: RollingInterval.Day)
+        .CreateLogger();
 
-// REGISTRATION OF SERVICES WITH DI CONTAINER
-
-// Read environment variables for JWT auth
-var secretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
-    ?? throw new InvalidOperationException("Critical Failure: JWT_SECRET_KEY environment variable is not set.");
-var issuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? "TelemetryDefaultIssuer";
-var audience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? "TelemetryDefaultAudience";
-
-
-// Register JWT Authentication
-builder.Services.AddAuthentication(options =>
+try
 {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
+    Log.Information("Starting up Telemetry Web API Engine...");
+
+    var builder = WebApplication.CreateBuilder(args);
+
+    // Enable Serilog instead of default Logger
+    builder.Host.UseSerilog();
+
+    // Bind mail environment vars to MailSettings class
+    builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
+
+    // Register MailService;
+    builder.Services.AddTransient<IMailService, DefaultMailService>();
+
+    // Read environment variables for JWT auth
+    var secretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+        ?? throw new InvalidOperationException("Critical Failure: JWT_SECRET_KEY environment variable is not set.");
+    var issuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? "TelemetryDefaultIssuer";
+    var audience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? "TelemetryDefaultAudience";
+
+    // Register JWT Authentication
+    builder.Services.AddAuthentication(options =>
     {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        
-        ValidIssuer = issuer,
-        ValidAudience = audience,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
-        ClockSkew = TimeSpan.Zero 
-    };
-});
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = issuer,
+            ValidAudience = audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+            ClockSkew = TimeSpan.Zero 
+        };
+    });
 
-// Read variables directly from the environment (loaded from your .env file)
-var dbHost = "localhost";
-var dbPort = "5432";
-var dbName = Environment.GetEnvironmentVariable("DB_NAME") ?? "enterprisedb";
-var dbUser = Environment.GetEnvironmentVariable("DB_USER") ?? "devuser";
-var dbPass = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "devpassword";
+    // Build DB Connection String
+    var dbHost = "localhost";
+    var dbPort = "5432";
+    var dbName = Environment.GetEnvironmentVariable("DB_NAME") ?? "enterprisedb";
+    var dbUser = Environment.GetEnvironmentVariable("DB_USER") ?? "devuser";
+    var dbPass = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "devpassword";
 
-var connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPass}";
+    var connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPass}";
 
-// Register PostgreSQL
-builder.Services.AddDbContext<TelemetryDbContext>(options => options.UseNpgsql(connectionString));
-builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+    builder.Services.AddDbContext<TelemetryDbContext>(options => options.UseNpgsql(connectionString));
+    builder.Services.AddControllers();
+    builder.Services.AddOpenApi();
 
-var app = builder.Build();
+    var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
+    // 🚀 TWEAK 1: Clean up internal HTTP logging noise (Place BEFORE controller mapping)
+    app.UseSerilogRequestLogging();
+
+    if (app.Environment.IsDevelopment())
+    {
+        app.MapOpenApi();
+    }
+
+    app.UseHttpsRedirection();
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.MapControllers();
+
+    app.Run();
 }
-
-app.UseHttpsRedirection();
-
-app.UseAuthentication();
-
-app.UseAuthorization();
-
-app.MapControllers();
-
-app.Run();
+catch (Exception ex)
+{
+    Log.Fatal(ex, "The application host terminated unexpectedly during initialization.");
+}
+finally
+{
+    // 🚀 TWEAK 2: Forces Serilog to dump remaining memory streams to disk before app dies
+    Log.CloseAndFlush();
+}
