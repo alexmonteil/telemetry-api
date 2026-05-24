@@ -14,11 +14,13 @@ public class AuthController : ControllerBase
 {
     private readonly IConfiguration _config;
     private readonly TelemetryDbContext _context;
+    private readonly IMailService _mailService;
 
-    public AuthController(IConfiguration config, TelemetryDbContext context)
+    public AuthController(IConfiguration config, TelemetryDbContext context, IMailService mailService)
     {
         _config = config;
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _mailService = mailService;
     }
 
     [HttpPost("register")]
@@ -58,6 +60,7 @@ public class AuthController : ControllerBase
         await _context.SaveChangesAsync();
 
         // SETUP EMAIL SERVICE TO EMAIL Verification token
+        await _mailService.SendVerificationEmailAsync(newUser.Email, newUser.Username, emailVerificationToken);
 
         return CreatedAtAction(
             nameof(Register),
