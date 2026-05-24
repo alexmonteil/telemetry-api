@@ -64,7 +64,7 @@ public class AuthController : ControllerBase
 
         return CreatedAtAction(
             nameof(Register),
-            new {id = newUser.Id },
+            new { id = newUser.Id },
             new RegistrationResponse
             {
                 UserId = newUser.Id,
@@ -85,7 +85,7 @@ public class AuthController : ControllerBase
         var user = await _context.Users
                     .Include(u => u.UserCredential)
                     .FirstOrDefaultAsync(u => u.Email == normalizedEmail);
-        
+
         if (user == null || user.UserCredential == null)
         {
             return Unauthorized(invalidCredentialsMsg);
@@ -112,7 +112,7 @@ public class AuthController : ControllerBase
             Username = user.Username,
             Email = user.Email
         };
-        
+
         return Ok(authResponse);
     }
 

@@ -44,13 +44,13 @@ public class DefaultMailService : IMailService
             await client.ConnectAsync(_settings.MailHost, _settings.MailPort, SecureSocketOptions.StartTls);
             await client.AuthenticateAsync(_settings.MailAddress, _settings.MailPassword);
             await client.SendAsync(email);
-            
-            return true; 
+
+            return true;
         }
         catch (AuthenticationException ex)
         {
             _logger.LogError(ex, "SMTP authentication failed for provider {Host}.", _settings.MailHost);
-            return false; 
+            return false;
         }
         catch (SmtpCommandException ex)
         {

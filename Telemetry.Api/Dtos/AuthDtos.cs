@@ -29,6 +29,21 @@ public record LoginRequest
     public required string Password { get; init; }
 }
 
+public record VerifyRequest
+{
+    [Required(ErrorMessage = "Email address is required.")]
+    [EmailAddress(ErrorMessage = "Invalid email address format.")]
+    [MaxLength(254)]
+    public required string Email { get; init; }
+
+    [Required(ErrorMessage = "Verification token is required.")]
+    // Exact bounding lock: Hex strings from 32 bytes are ALWAYS exactly 64 characters
+    [StringLength(64, MinimumLength = 64, ErrorMessage = "Verification token must be exactly 64 characters.")]
+    // Regex Lock: Ensures the string contains ONLY numbers 0-9 and letters A-F
+    [RegularExpression(@"^[0-9a-fA-F]{64}$", ErrorMessage = "Verification token format is invalid.")]
+    public required string Token { get; init; }
+}
+
 
 // OUTPUT CONTRACTS (Responses)
 
