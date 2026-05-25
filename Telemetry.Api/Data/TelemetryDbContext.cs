@@ -9,4 +9,14 @@ public class TelemetryDbContext : DbContext
     public DbSet<Mission> Missions => Set<Mission>();
     public DbSet<Phase> Phases => Set<Phase>();
     public DbSet<TelemetryEvent> TelemetryEvents => Set<TelemetryEvent>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(UserEntityTypeConfiguration).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(UserCredentialEntityTypeConfiguration).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(MissionEntityTypeConfiguration).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(PhaseEntityTypeConfiguration).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(TelemetryEventEntityTypeConfiguration).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(UserMissionEntityTypeConfiguration).Assembly);
+    }
 }

@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-public class TelemetryEntityTypeConfiguration : IEntityTypeConfiguration<TelemetryEvent>
+public class TelemetryEventEntityTypeConfiguration : IEntityTypeConfiguration<TelemetryEvent>
 {
     public void Configure(EntityTypeBuilder<TelemetryEvent> builder)
     {
