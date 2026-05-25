@@ -117,6 +117,56 @@ public class AuthController : ControllerBase
         return Ok(authResponse);
     }
 
+    [HttpPost("verify")]
+    public async Task<ActionResult<OperationStatusResponse>> Verify([FromQuery] VerifyRequest req)
+    {
+        // check if a UserCredential exists with given token
+        var normalizedEmail = req.Email.Trim().ToLower();
+        var lookupToken = req.Token.Trim().ToUpper();
+        var credential = await _context.UserCredentials
+                    .Include(uc => uc.User)
+                    .FirstOrDefaultAsync(uc => uc.VerifyToken == lookupToken);
+
+        // Handle no credential or no user or email and token not matched
+        if (credential == null || credential.User == null || credential.User.Email != normalizedEmail)
+        {
+            return BadRequest(new OperationStatusResponse(
+                false,
+                "The verification token or email address provided is invalid."
+            ));
+        }
+
+        // Handle user email already verified
+        if (credential.User.IsEmailVerified)
+        {
+            return Ok(new OperationStatusResponse(
+                true,
+                "Your email address has already been verified! You can proceed to log in."
+            ));
+        }
+
+        // Handle expired token
+        if (DateTime.UtcNow > credential.VerifyTokenExpiration)
+        {
+            return BadRequest(new OperationStatusResponse(
+                false,
+                "This verification token has expired. Please request a new activation link."
+            ));
+        }
+
+        // Update data to reflect successful verification
+        credential.User.IsEmailVerified = true;
+        credential.VerifyToken = null;
+        credential.VerifyTokenExpiration = null;
+
+        await _context.SaveChangesAsync();
+        return Ok(new OperationStatusResponse(
+            true,
+            "Your email address has been successfully verified! You can now log in to the application."
+        ));
+
+    }
+
     private string GenerateJwtToken(User user)
     {
         var claims = new[]
