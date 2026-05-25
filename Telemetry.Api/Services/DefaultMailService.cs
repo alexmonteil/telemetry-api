@@ -23,9 +23,9 @@ public class DefaultMailService : IMailService
     {
         // Build email message metadata
         var email = new MimeMessage();
-        email.From.Add(new MailboxAddress(_settings.DisplayName, _settings.MailAddress));
+        email.From.Add(new MailboxAddress(_settings.AppName, _settings.MailAddress));
         email.To.Add(new MailboxAddress(username, mailTo));
-        email.Subject = "Verify your Telemetry Account";
+        email.Subject = $"Verify your {_settings.AppName} Account";
 
         // Construct verification link
         var verificationUrl = $"https://localhost:7001/api/auth/verify-email?token={token}";
@@ -36,7 +36,7 @@ public class DefaultMailService : IMailService
                 <h3>Welcome to the grid, {username}!</h3>
                 <p>Please activate your security credentials by clicking the link below:</p>
                 <p><a href='{verificationUrl}'>Verify Email Address</a></p>
-                <small>This token will expire in 24 hours.</small>"
+                <small>This token will expire in 2 hours.</small>"
         };
         email.Body = bodyBuilder.ToMessageBody();
 
