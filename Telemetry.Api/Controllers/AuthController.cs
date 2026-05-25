@@ -61,7 +61,7 @@ public class AuthController : ControllerBase
         await _context.SaveChangesAsync();
 
         // SETUP EMAIL SERVICE TO EMAIL Verification token
-        await _mailService.SendVerificationEmailAsync(newUser.Email, newUser.Username, emailVerificationToken);
+        var mailSent = await _mailService.SendVerificationEmailAsync(newUser.Email, newUser.Username, emailVerificationToken);
 
         return CreatedAtAction(
             nameof(Register),
@@ -71,7 +71,9 @@ public class AuthController : ControllerBase
                 UserId = newUser.Id,
                 Username = newUser.Username,
                 Email = newUser.Email,
-                Message = "Registration successful! Please check your inbox to verify your email before logging in."
+                Message = mailSent
+                    ? "Registration successful! Please check your inbox to verify your email before logging in."
+                    : "Registration successful, but we encountered an error sending the verification email. Please try resending the verification link."
             }
         );
     }
@@ -99,7 +101,7 @@ public class AuthController : ControllerBase
         var isPasswordValid = BC.Verify(req.Password, user.UserCredential.PasswordHash);
         if (!isPasswordValid)
         {
-            return BadRequest(new OperationStatusResponse(
+            return Unauthorized(new OperationStatusResponse(
                 false,
                 invalidCredentialsMsg
             ));
@@ -176,7 +178,7 @@ public class AuthController : ControllerBase
 
     }
 
-    [HttpPost("/resend-verification")]
+    [HttpPost("resend-verification")]
     public async Task<ActionResult<OperationStatusResponse>> ResendVerification([FromBody] ResendVerifyRequest req)
     {
         var normalizedEmail = req.Email.Trim().ToLower();
@@ -184,21 +186,13 @@ public class AuthController : ControllerBase
                 .Include(u => u.UserCredential)
                 .FirstOrDefaultAsync(u => u.Email == normalizedEmail);
 
-        // Handle user does not exist
-        if (user == null || user.UserCredential == null)
+        // Handle user does not exist or already verified (Security: Prevent Email Enumeration)
+        if (user == null || user.UserCredential == null || user.IsEmailVerified)
         {
-            return BadRequest(new OperationStatusResponse(
-                false,
-                "The verification token or Email address provided is invalid"
-            ));
-        }
-
-        // Handle user already verified
-        if (user.IsEmailVerified)
-        {
+            // Optionally add await Task.Delay(100) here to deter timing attacks
             return Ok(new OperationStatusResponse(
                 true,
-                "Your email address has already been verified! You can proceed to log in."
+                "If an unverified account with that email address exists, a new verification link has been sent."
             ));
         }
 
@@ -209,11 +203,19 @@ public class AuthController : ControllerBase
         await _context.SaveChangesAsync();
 
         // Email new verification link
-        await _mailService.SendVerificationEmailAsync(user.Email, user.Username, emailVerificationToken);
+        var mailSent = await _mailService.SendVerificationEmailAsync(user.Email, user.Username, emailVerificationToken);
+
+        if (!mailSent)
+        {
+            return StatusCode(500, new OperationStatusResponse(
+                false,
+                "Failed to send the verification email. Please try again later."
+            ));
+        }
 
         return Ok(new OperationStatusResponse(
             true,
-            "A verification link has been sent."
+            "If an unverified account with that email address exists, a new verification link has been sent."
         ));
     }
 
