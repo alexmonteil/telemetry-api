@@ -44,6 +44,14 @@ public record VerifyRequest
     public required string Token { get; init; }
 }
 
+public record ResendVerifyRequest
+{
+    [Required(ErrorMessage = "Email address is required.")]
+    [EmailAddress(ErrorMessage = "Invalid email address format.")]
+    [MaxLength(254)]
+    public required string Email { get; init; }
+}
+
 
 // OUTPUT CONTRACTS (Responses)
 

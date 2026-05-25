@@ -52,7 +52,7 @@ public class AuthController : ControllerBase
         {
             PasswordHash = passwordHash,
             VerifyToken = emailVerificationToken,
-            VerifyTokenExpiration = DateTime.UtcNow.AddHours(24)
+            VerifyTokenExpiration = DateTime.UtcNow.AddHours(2)
         };
 
         newUser.UserCredential = newCredential;
@@ -127,7 +127,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("verify")]
-    public async Task<ActionResult<OperationStatusResponse>> Verify([FromQuery] VerifyRequest req)
+    public async Task<ActionResult<OperationStatusResponse>> Verify([FromBody] VerifyRequest req)
     {
         // check if a UserCredential exists with given token
         var normalizedEmail = req.Email.Trim().ToLower();
@@ -174,6 +174,47 @@ public class AuthController : ControllerBase
             "Your email address has been successfully verified! You can now log in to the application."
         ));
 
+    }
+
+    [HttpPost("/resend-verification")]
+    public async Task<ActionResult<OperationStatusResponse>> ResendVerification([FromBody] ResendVerifyRequest req)
+    {
+        var normalizedEmail = req.Email.Trim().ToLower();
+        var user = await _context.Users
+                .Include(u => u.UserCredential)
+                .FirstOrDefaultAsync(u => u.Email == normalizedEmail);
+
+        // Handle user does not exist
+        if (user == null || user.UserCredential == null)
+        {
+            return BadRequest(new OperationStatusResponse(
+                false,
+                "The verification token or Email address provided is invalid"
+            ));
+        }
+
+        // Handle user already verified
+        if (user.IsEmailVerified)
+        {
+            return Ok(new OperationStatusResponse(
+                true,
+                "Your email address has already been verified! You can proceed to log in."
+            ));
+        }
+
+        // Generate new token and send
+        var emailVerificationToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        user.UserCredential.VerifyToken = emailVerificationToken;
+        user.UserCredential.VerifyTokenExpiration = DateTime.UtcNow.AddHours(2);
+        await _context.SaveChangesAsync();
+
+        // Email new verification link
+        await _mailService.SendVerificationEmailAsync(user.Email, user.Username, emailVerificationToken);
+
+        return Ok(new OperationStatusResponse(
+            true,
+            "A verification link has been sent."
+        ));
     }
 
     private string GenerateJwtToken(User user)
