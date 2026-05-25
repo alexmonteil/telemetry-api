@@ -25,6 +25,9 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("register")]
+    [EndpointSummary("Registers a new user.")]
+    [ProducesResponseType(typeof(RegistrationResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<RegistrationResponse>> Register([FromBody] RegisterRequest req)
     {
         var normalizedEmail = req.Email.Trim().ToLower();
@@ -35,7 +38,10 @@ public class AuthController : ControllerBase
 
         if (userExists)
         {
-            return Conflict("Username or Email is already in use.");
+            return Conflict(new OperationStatusResponse(
+                false,
+                "Username or Email is already in use."
+            ));
         }
 
         var passwordHash = BC.HashPassword(req.Password);
@@ -79,6 +85,10 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
+    [EndpointSummary("Logs user in by prodiving a jwt.")]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest req)
     {
         var normalizedEmail = req.Email.Trim().ToLower();
@@ -129,6 +139,9 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("verify")]
+    [EndpointSummary("Verifies a user's email address using an activation token.")]
+    [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<OperationStatusResponse>> Verify([FromBody] VerifyRequest req)
     {
         // check if a UserCredential exists with given token
@@ -179,6 +192,9 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("resend-verification")]
+    [EndpointSummary("Send a new verification link to the user.")]
+    [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<OperationStatusResponse>> ResendVerification([FromBody] ResendVerifyRequest req)
     {
         var normalizedEmail = req.Email.Trim().ToLower();
