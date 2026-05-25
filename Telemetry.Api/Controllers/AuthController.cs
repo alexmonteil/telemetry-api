@@ -89,20 +89,29 @@ public class AuthController : ControllerBase
 
         if (user == null || user.UserCredential == null)
         {
-            return Unauthorized(invalidCredentialsMsg);
+            return Unauthorized(new OperationStatusResponse(
+                false,
+                invalidCredentialsMsg
+            ));
         }
 
         // Check if password is valid
         var isPasswordValid = BC.Verify(req.Password, user.UserCredential.PasswordHash);
         if (!isPasswordValid)
         {
-            return BadRequest(invalidCredentialsMsg);
+            return BadRequest(new OperationStatusResponse(
+                false,
+                invalidCredentialsMsg
+            ));
         }
 
         // Check if user is verified
         if (!user.IsEmailVerified)
         {
-            return BadRequest("Account is unverified. Please check your inbox for the activation link.");
+            return BadRequest(new OperationStatusResponse(
+                false,
+                "Account is unverified. Please check your inbox for the activation link."
+            ));
         }
 
         // Validation fully passed => Generate mint token
