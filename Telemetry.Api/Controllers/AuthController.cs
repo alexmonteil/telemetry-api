@@ -9,13 +9,17 @@ using Microsoft.IdentityModel.Tokens;
 
 using BC = BCrypt.Net.BCrypt;
 
+namespace BaseAuth.Api.Controllers;
+
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/auth")]
 public class AuthController : ControllerBase
 {
     private readonly IConfiguration _config;
     private readonly TelemetryDbContext _context;
     private readonly IMailService _mailService;
+
+    private const string DummyPasswordHash = "$2a$11$K8V81/bWv23VpM8.AhnXHeWdfZ9Ie56K.yB77XNq8KshW9pXB.Gqy";
 
     public AuthController(IConfiguration config, TelemetryDbContext context, IMailService mailService)
     {
@@ -25,7 +29,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("register")]
-    [EndpointSummary("Registers a new user.")]
+    [EndpointSummary("Registers a new user account inside the tracking schema.")]
     [ProducesResponseType(typeof(RegistrationResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<RegistrationResponse>> Register([FromBody] RegisterRequest req)
@@ -33,15 +37,10 @@ public class AuthController : ControllerBase
         var normalizedEmail = req.Email.Trim().ToLower();
         var normalizedUsername = req.Username.Trim().ToLower();
 
-        // Check if user exists
         var userExists = await _context.Users.AnyAsync(u => u.Email == normalizedEmail || u.Username == normalizedUsername);
-
         if (userExists)
         {
-            return Conflict(new OperationStatusResponse(
-                false,
-                "Username or Email is already in use."
-            ));
+            return Conflict(new OperationStatusResponse(false, "Username or Email is already in use."));
         }
 
         var passwordHash = BC.HashPassword(req.Password);
@@ -51,7 +50,8 @@ public class AuthController : ControllerBase
         {
             Username = normalizedUsername,
             Email = normalizedEmail,
-            IsEmailVerified = false
+            IsEmailVerified = false,
+            Role = UserRole.User
         };
 
         var newCredential = new UserCredential
@@ -66,7 +66,6 @@ public class AuthController : ControllerBase
         _context.Users.Add(newUser);
         await _context.SaveChangesAsync();
 
-        // SETUP EMAIL SERVICE TO EMAIL Verification token
         var mailSent = await _mailService.SendVerificationEmailAsync(newUser.Email, newUser.Username, emailVerificationToken);
 
         return CreatedAtAction(
@@ -85,7 +84,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
-    [EndpointSummary("Logs user in by prodiving a jwt.")]
+    [EndpointSummary("Validates identity signatures and emits an authorized access token.")]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status400BadRequest)]
@@ -94,48 +93,65 @@ public class AuthController : ControllerBase
         var normalizedEmail = req.Email.Trim().ToLower();
         const string invalidCredentialsMsg = "Invalid credentials provided.";
 
-        // Check if user and credentials exist
+        const int MaxFailedAttempts = 5;
+        const int LockoutMinutes = 15;
+
         var user = await _context.Users
-                    .Include(u => u.UserCredential)
-                    .FirstOrDefaultAsync(u => u.Email == normalizedEmail);
+            .Include(u => u.UserCredential)
+            .FirstOrDefaultAsync(u => u.Email == normalizedEmail);
 
-        if (user == null || user.UserCredential == null)
+        var credential = user?.UserCredential;
+
+        if (credential != null && credential.FailedLoginAttempts >= MaxFailedAttempts)
         {
-            return Unauthorized(new OperationStatusResponse(
-                false,
-                invalidCredentialsMsg
-            ));
+            if (credential.LastLoginAttempt.HasValue &&
+                credential.LastLoginAttempt.Value.AddMinutes(LockoutMinutes) > DateTime.UtcNow)
+            {
+                var remainingTime = credential.LastLoginAttempt.Value.AddMinutes(LockoutMinutes) - DateTime.UtcNow;
+
+                return BadRequest(new OperationStatusResponse(
+                    false,
+                    $"This account is temporarily locked due to too many failed login attempts. Please try again in {Math.Ceiling(remainingTime.TotalMinutes)} minutes."
+                ));
+            }
         }
 
-        // Check if password is valid
-        var isPasswordValid = BC.Verify(req.Password, user.UserCredential.PasswordHash);
-        if (!isPasswordValid)
+        var hashToVerify = credential?.PasswordHash ?? DummyPasswordHash;
+        var passwordMatches = BC.Verify(req.Password, hashToVerify);
+
+        if (credential != null)
         {
-            return Unauthorized(new OperationStatusResponse(
-                false,
-                invalidCredentialsMsg
-            ));
+            credential.LastLoginAttempt = DateTime.UtcNow;
         }
 
-        // Check if user is verified
+        if (user == null || credential == null || !passwordMatches)
+        {
+            if (credential != null)
+            {
+                credential.FailedLoginAttempts += 1;
+                await _context.SaveChangesAsync();
+            }
+
+            return Unauthorized(new OperationStatusResponse(false, invalidCredentialsMsg));
+        }
+
         if (!user.IsEmailVerified)
         {
-            return BadRequest(new OperationStatusResponse(
-                false,
-                "Account is unverified. Please check your inbox for the activation link."
-            ));
+            return BadRequest(new OperationStatusResponse(false, "Account is unverified. Please check your inbox for the activation link."));
         }
 
-        // Validation fully passed => Generate mint token
+        credential.FailedLoginAttempts = 0;
+        await _context.SaveChangesAsync();
+
         var token = GenerateJwtToken(user);
-        var authResponse = new AuthResponse
+
+        return Ok(new AuthResponse
         {
             Token = token,
             Username = user.Username,
-            Email = user.Email
-        };
-
-        return Ok(authResponse);
+            Email = user.Email,
+            Role = user.Role.ToString()
+        });
     }
 
     [HttpPost("verify")]
@@ -144,51 +160,35 @@ public class AuthController : ControllerBase
     [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<OperationStatusResponse>> Verify([FromBody] VerifyRequest req)
     {
-        // check if a UserCredential exists with given token
         var normalizedEmail = req.Email.Trim().ToLower();
         var lookupToken = req.Token.Trim().ToUpper();
-        var credential = await _context.UserCredentials
-                    .Include(uc => uc.User)
-                    .FirstOrDefaultAsync(uc => uc.VerifyToken == lookupToken);
 
-        // Handle no credential or no user or email and token not matched
+        var credential = await _context.UserCredentials
+            .Include(uc => uc.User)
+            .FirstOrDefaultAsync(uc => uc.VerifyToken == lookupToken);
+
         if (credential == null || credential.User == null || credential.User.Email != normalizedEmail)
         {
-            return BadRequest(new OperationStatusResponse(
-                false,
-                "The verification token or email address provided is invalid."
-            ));
+            return BadRequest(new OperationStatusResponse(false, "The verification token or email address provided is invalid."));
         }
 
-        // Handle user email already verified
         if (credential.User.IsEmailVerified)
         {
-            return Ok(new OperationStatusResponse(
-                true,
-                "Your email address has already been verified! You can proceed to log in."
-            ));
+            return Ok(new OperationStatusResponse(true, "Your email address has already been verified! You can proceed to log in."));
         }
 
-        // Handle expired token
-        if (DateTime.UtcNow > credential.VerifyTokenExpiration)
+        if (credential.VerifyTokenExpiration.HasValue && DateTime.UtcNow > credential.VerifyTokenExpiration.Value)
         {
-            return BadRequest(new OperationStatusResponse(
-                false,
-                "This verification token has expired. Please request a new activation link."
-            ));
+            return BadRequest(new OperationStatusResponse(false, "This verification token has expired. Please request a new activation link."));
         }
 
-        // Update data to reflect successful verification
         credential.User.IsEmailVerified = true;
         credential.VerifyToken = null;
         credential.VerifyTokenExpiration = null;
 
         await _context.SaveChangesAsync();
-        return Ok(new OperationStatusResponse(
-            true,
-            "Your email address has been successfully verified! You can now log in to the application."
-        ));
 
+        return Ok(new OperationStatusResponse(true, "Your email address has been successfully verified! You can now log in to the application."));
     }
 
     [HttpPost("resend-verification")]
@@ -199,40 +199,26 @@ public class AuthController : ControllerBase
     {
         var normalizedEmail = req.Email.Trim().ToLower();
         var user = await _context.Users
-                .Include(u => u.UserCredential)
-                .FirstOrDefaultAsync(u => u.Email == normalizedEmail);
+            .Include(u => u.UserCredential)
+            .FirstOrDefaultAsync(u => u.Email == normalizedEmail);
 
-        // Handle user does not exist or already verified (Security: Prevent Email Enumeration)
         if (user == null || user.UserCredential == null || user.IsEmailVerified)
         {
-            // Optionally add await Task.Delay(100) here to deter timing attacks
-            return Ok(new OperationStatusResponse(
-                true,
-                "If an unverified account with that email address exists, a new verification link has been sent."
-            ));
+            return Ok(new OperationStatusResponse(true, "If an unverified account with that email address exists, a new verification link has been sent."));
         }
 
-        // Generate new token and send
         var emailVerificationToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         user.UserCredential.VerifyToken = emailVerificationToken;
         user.UserCredential.VerifyTokenExpiration = DateTime.UtcNow.AddHours(2);
         await _context.SaveChangesAsync();
 
-        // Email new verification link
         var mailSent = await _mailService.SendVerificationEmailAsync(user.Email, user.Username, emailVerificationToken);
-
         if (!mailSent)
         {
-            return StatusCode(500, new OperationStatusResponse(
-                false,
-                "Failed to send the verification email. Please try again later."
-            ));
+            return StatusCode(500, new OperationStatusResponse(false, "Failed to send the verification email. Please try again later."));
         }
 
-        return Ok(new OperationStatusResponse(
-            true,
-            "If an unverified account with that email address exists, a new verification link has been sent."
-        ));
+        return Ok(new OperationStatusResponse(true, "If an unverified account with that email address exists, a new verification link has been sent."));
     }
 
     private string GenerateJwtToken(User user)
@@ -241,7 +227,8 @@ public class AuthController : ControllerBase
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Name, user.Username),
-            new Claim(ClaimTypes.Email, user.Email)
+            new Claim(ClaimTypes.Email, user.Email),
+            new Claim(ClaimTypes.Role, user.Role.ToString())
         };
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["JWT_SECRET_KEY"]!));

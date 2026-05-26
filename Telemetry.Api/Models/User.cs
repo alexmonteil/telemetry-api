@@ -6,6 +6,7 @@ public class User
     public bool IsEmailVerified { get; set; } = false;
     public string? AvatarUrl { get; set; }
     public DateTime CreatedAt { get; set; }
+    public UserRole Role { get; set; } = UserRole.User;
 
     // Navigation
     public UserCredential? UserCredential { get; set; }

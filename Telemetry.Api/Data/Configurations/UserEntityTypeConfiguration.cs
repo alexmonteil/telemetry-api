@@ -46,5 +46,12 @@ public class UserEntityTypeConfiguration : IEntityTypeConfiguration<User>
             .Property(u => u.IsEmailVerified)
             .IsRequired()
             .HasDefaultValue(false);
+
+        // Store the UserRole enum as a human-readable string in Postgres
+        builder.Property(u => u.Role)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(UserRole.User);
     }
 }
