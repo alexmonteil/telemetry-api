@@ -21,6 +21,8 @@ public class MissionsController : ControllerBase
     [HttpPost]
     [Authorize(Roles = "Manager")]
     [EndpointSummary("Creates a new mission.")]
+    [ProducesResponseType(typeof(CreateMissionResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<CreateMissionResponse>> CreateMission([FromBody] CreateMissionRequest req)
     {
         // Check authorization

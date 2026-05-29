@@ -47,4 +47,3 @@ public record UserSummary
     public required string Username { get; init; }
     public string? AvatarUrl { get; init; }
 }
-
