@@ -70,10 +70,16 @@ try
     builder.Services.AddControllers();
     builder.Services.AddOpenApi();
 
+    // Register the custom Global Exception Handler
+    builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+    builder.Services.AddProblemDetails();
+
     var app = builder.Build();
 
     // TWEAK 1: Clean up internal HTTP logging noise (Place BEFORE controller mapping)
     app.UseSerilogRequestLogging();
+
+    app.UseExceptionHandler(); // Maps the IExceptionHandler middleware into the pipeline
 
     if (app.Environment.IsDevelopment())
     {
