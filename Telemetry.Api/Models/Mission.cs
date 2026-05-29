@@ -7,7 +7,7 @@ public class Mission
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
-    public User Leader { get; set; }
+    public User Leader { get; set; } = null!;
     public List<Phase> Phases { get; set; } = [];
     public List<UserMission> TeamMembers { get; set; } = [];
 }
