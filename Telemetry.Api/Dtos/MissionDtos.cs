@@ -44,7 +44,6 @@ public record GetMissionResponse
     public List<UserSummary> TeamMembers { get; init; } = [];
 }
 
-
 public record PhaseSummary
 {
     public required int Id { get; init; }
