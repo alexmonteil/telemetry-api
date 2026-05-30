@@ -1,7 +1,6 @@
 using System.Security.Claims;
 
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,26 +20,24 @@ public class MissionsController : ControllerBase
     // CREATE
     [HttpPost]
     [Authorize(Roles = "Manager")]
-    [EndpointSummary("Creates a new mission.")]
+    [EndpointSummary("Creates a new mission record.")]
     [ProducesResponseType(typeof(CreateMissionResponse), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<CreateMissionResponse>> CreateMission([FromBody] CreateMissionRequest req)
     {
-        // Check authorization
         var nameIdentifierClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         var usernameClaim = User.FindFirst(ClaimTypes.Name)?.Value;
 
-        // Perform a safety check
         if (string.IsNullOrEmpty(nameIdentifierClaim) || !int.TryParse(nameIdentifierClaim, out int authenticatedUserId) || string.IsNullOrEmpty(usernameClaim))
         {
             _logger.LogWarning("Failed to create mission: Invalid or missing identity claims.");
-            return Unauthorized(new OperationStatusResponse(
-                false,
-                "An invalid identity signature was detected inside the payload."
-            ));
+            return Problem(
+                detail: "An invalid identity signature was detected inside the token payload.",
+                statusCode: StatusCodes.Status401Unauthorized
+            );
         }
 
-        // Create the entity
         var newMission = new Mission
         {
             Name = req.Name,
@@ -48,7 +45,6 @@ public class MissionsController : ControllerBase
             LeaderId = authenticatedUserId
         };
 
-        // Save
         _context.Missions.Add(newMission);
         await _context.SaveChangesAsync();
 
@@ -72,31 +68,29 @@ public class MissionsController : ControllerBase
         );
     }
 
-
     // READ 
     [HttpGet("{id:int}")]
-    [EndpointSummary("Retrieves a mission if it exists.")]
+    [EndpointSummary("Retrieves a single mission asset specification if it exists.")]
     [ProducesResponseType(typeof(GetMissionResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<GetMissionResponse>> GetMissionById(int id)
     {
-        // Search for mission
         var mission = await _context.Missions
-                            .Include(m => m.Phases)
-                            .Include(m => m.Leader)
-                            .Include(m => m.TeamMembers)
-                                .ThenInclude(tm => tm.User)
-                            .FirstOrDefaultAsync(m => m.Id == id);
+            .Include(m => m.Phases)
+            .Include(m => m.Leader)
+            .Include(m => m.TeamMembers)
+                .ThenInclude(tm => tm.User)
+            .FirstOrDefaultAsync(m => m.Id == id);
 
-        // Perform checks
         if (mission == null)
         {
             _logger.LogWarning("Mission with ID {MissionId} was not found.", id);
-            return NotFound(new OperationStatusResponse(false, $"Mission with ID {id} not found."));
+            return Problem(
+                detail: $"Mission with ID {id} could not be found.",
+                statusCode: StatusCodes.Status404NotFound
+            );
         }
 
-
-        // Return Dto
         var response = new GetMissionResponse
         {
             Id = mission.Id,
@@ -119,42 +113,59 @@ public class MissionsController : ControllerBase
         };
 
         _logger.LogInformation("Successfully retrieved mission {MissionId}", id);
-
         return Ok(response);
     }
 
     // UPDATE: PUT
     [HttpPut("{id:int}")]
     [Authorize(Roles = "Manager")]
-    [EndpointSummary("Updates a mission if it exists.")]
-    [ProducesResponseType(typeof(NoContent), StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<OperationStatusResponse>> UpdateMission(int id, [FromBody] PutMissionRequest req)
+    [EndpointSummary("Overwrites an existing mission record details.")]
+    // 💡 TWEAK: Status204NoContent does not return a type payload. Omit typeof(NoContent).
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateMission(int id, [FromBody] PutMissionRequest req)
     {
         var mission = await _context.Missions.FirstOrDefaultAsync(m => m.Id == id);
 
-        // Perform checks
         if (mission == null)
         {
-            return NotFound(new OperationStatusResponse(
-                false,
-                "Mission could not be found."
-            ));
+            _logger.LogWarning("Mission with ID {MissionId} was not found.", id);
+            return Problem(
+                detail: "Target modification mission asset could not be located.",
+                statusCode: StatusCodes.Status404NotFound
+            );
         }
 
-        // Update entity
         mission.Name = req.Name;
         mission.Description = req.Description;
 
-        // Save changes
         await _context.SaveChangesAsync();
-
+        _logger.LogInformation("Successfully updated mission {MissionId}", id);
         return NoContent();
     }
 
-
-    // UPDATE: PATCH
-
-
     // DELETE
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Manager")]
+    [EndpointSummary("Removes a mission asset from the database tracking schemas.")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteMission(int id)
+    {
+        var mission = await _context.Missions.FirstOrDefaultAsync(m => m.Id == id);
+
+        if (mission == null)
+        {
+            _logger.LogWarning("Mission with ID {MissionId} was not found.", id);
+            return Problem(
+                detail: "Target deletion mission asset could not be located.",
+                statusCode: StatusCodes.Status404NotFound
+            );
+        }
+
+        _context.Missions.Remove(mission);
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Successfully deleted mission {MissionId}", id);
+        return NoContent();
+    }
 }

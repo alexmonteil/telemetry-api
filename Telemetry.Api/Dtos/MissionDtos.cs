@@ -22,8 +22,6 @@ public record PutMissionRequest
     public string? Description { get; init; }
 }
 
-
-
 // OUTPUT CONTRACTS (Responses)
 
 public record CreateMissionResponse
