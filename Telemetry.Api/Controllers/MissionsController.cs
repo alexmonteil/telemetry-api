@@ -1,6 +1,7 @@
 using System.Security.Claims;
 
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -73,7 +74,7 @@ public class MissionsController : ControllerBase
 
 
     // READ 
-    [HttpGet("{id}")]
+    [HttpGet("{id:int}")]
     [EndpointSummary("Retrieves a mission if it exists.")]
     [ProducesResponseType(typeof(GetMissionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status404NotFound)]
@@ -122,7 +123,37 @@ public class MissionsController : ControllerBase
         return Ok(response);
     }
 
-    // UPDATE
+    // UPDATE: PUT
+    [HttpPut("{id:int}")]
+    [Authorize(Roles = "Manager")]
+    [EndpointSummary("Updates a mission if it exists.")]
+    [ProducesResponseType(typeof(NoContent), StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(OperationStatusResponse), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<OperationStatusResponse>> UpdateMission(int id, [FromBody] PutMissionRequest req)
+    {
+        var mission = await _context.Missions.FirstOrDefaultAsync(m => m.Id == id);
+
+        // Perform checks
+        if (mission == null)
+        {
+            return NotFound(new OperationStatusResponse(
+                false,
+                "Mission could not be found."
+            ));
+        }
+
+        // Update entity
+        mission.Name = req.Name;
+        mission.Description = req.Description;
+
+        // Save changes
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+
+    // UPDATE: PATCH
 
 
     // DELETE
