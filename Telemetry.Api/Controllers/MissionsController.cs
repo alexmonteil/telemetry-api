@@ -70,6 +70,7 @@ public class MissionsController : ControllerBase
 
     // READ 
     [HttpGet("{id:int}")]
+    [Authorize]
     [EndpointSummary("Retrieves a single mission asset specification if it exists.")]
     [ProducesResponseType(typeof(GetMissionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -120,7 +121,6 @@ public class MissionsController : ControllerBase
     [HttpPut("{id:int}")]
     [Authorize(Roles = "Manager")]
     [EndpointSummary("Overwrites an existing mission record details.")]
-    // 💡 TWEAK: Status204NoContent does not return a type payload. Omit typeof(NoContent).
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateMission(int id, [FromBody] PutMissionRequest req)
