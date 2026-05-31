@@ -36,26 +36,17 @@ public record GetPhaseResponse
     public required MissionSummary Mission { get; init; }
 }
 
-public record TelemetryEventSummary
-{
-    public required int Id { get; init; }
-    public required string Description { get; init; }
-    public required EventStatus Status { get; init; }
-    public required DateTime CreatedAt { get; init; }
-    public User? Assignee { get; init; }
-}
-
-public record MissionSummary
-{
-    public required int Id { get; init; }
-    public required string Name { get; init; }
-    public required UserSummary Leader { get; init; }
-}
-
 public record CreatePhaseResponse
 {
     public required int Id { get; init; }
     public required string Name { get; init; }
     public string? Description { get; init; }
     public int TelemetryEventsCount { get; init; } = 0;
+}
+
+public record PhaseSummary
+{
+    public required int Id { get; init; }
+    public required string Name { get; init; }
+    public string? Description { get; init; }
 }

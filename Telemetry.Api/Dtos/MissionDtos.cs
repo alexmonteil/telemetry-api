@@ -24,15 +24,6 @@ public record PutMissionRequest
 
 // OUTPUT CONTRACTS (Responses)
 
-public record CreateMissionResponse
-{
-    public required int Id { get; init; }
-    public required string Name { get; init; }
-    public string? Description { get; init; }
-    public DateTime CreatedAt { get; init; }
-    public required UserSummary Leader { get; init; }
-}
-
 public record GetMissionResponse
 {
     public required int Id { get; init; }
@@ -44,16 +35,18 @@ public record GetMissionResponse
     public List<UserSummary> TeamMembers { get; init; } = [];
 }
 
-public record PhaseSummary
+public record CreateMissionResponse
 {
     public required int Id { get; init; }
     public required string Name { get; init; }
     public string? Description { get; init; }
+    public DateTime CreatedAt { get; init; }
+    public required UserSummary Leader { get; init; }
 }
 
-public record UserSummary
+public record MissionSummary
 {
-    public required int UserId { get; init; }
-    public required string Username { get; init; }
-    public string? AvatarUrl { get; init; }
+    public required int Id { get; init; }
+    public required string Name { get; init; }
+    public required UserSummary Leader { get; init; }
 }
