@@ -27,31 +27,22 @@ public class PhasesController : ControllerBase
     public async Task<ActionResult<GetPhaseResponse>> GetPhaseById(int id)
     {
         var nameIdentifierClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var usernameClaim = User.FindFirst(ClaimTypes.Name)?.Value;
-
-        if (string.IsNullOrEmpty(nameIdentifierClaim) || !int.TryParse(nameIdentifierClaim, out int authenticatedUserId) || string.IsNullOrEmpty(usernameClaim))
+        if (string.IsNullOrEmpty(nameIdentifierClaim) || !int.TryParse(nameIdentifierClaim, out int authenticatedUserId))
         {
-            _logger.LogWarning("Failed to retrieve a phase: Invalid or missing identity claims.");
-            return Problem(
-                detail: "An invalid identity signature was detected inside the token payload.",
-                statusCode: StatusCodes.Status401Unauthorized
-            );
+            return Problem(detail: "Invalid identity claims signature.", statusCode: 401);
         }
 
         var phase = await _context.Phases
-                        .Include(p => p.Mission)
-                            .ThenInclude(m => m.Leader)
-                        .Include(p => p.TelemetryEvents)
-                        .FirstOrDefaultAsync(p => p.Id == id);
+            .Include(p => p.Mission)
+                .ThenInclude(m => m.Leader)
+            .Include(p => p.TelemetryEvents)
+            .FirstOrDefaultAsync(p => p.Id == id &&
+                (p.Mission.LeaderId == authenticatedUserId ||
+                 p.Mission.TeamMembers.Any(tm => tm.UserId == authenticatedUserId)));
 
-        // Perform checks
         if (phase == null)
         {
-            _logger.LogWarning("Phase with ID {PhaseId} was not found.", id);
-            return Problem(
-                detail: $"Phase with ID {id} could not be found.",
-                statusCode: StatusCodes.Status404NotFound
-            );
+            return Problem(detail: $"Phase with ID {id} could not be found.", statusCode: 404);
         }
 
         // Map phase to dto
@@ -80,7 +71,7 @@ public class PhasesController : ControllerBase
 
     // CREATE
     [HttpPost]
-    [Authorize]
+    [Authorize(Roles = "Manager")]
     [EndpointSummary("Creates a new phase.")]
     [ProducesResponseType(typeof(CreatePhaseResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
