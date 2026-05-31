@@ -65,7 +65,7 @@ public class PhasesController : ControllerBase
             }
         };
 
-        _logger.LogInformation("Successfully retrieved phase {PhaseId}", id);
+        _logger.LogInformation("Successfully retrieved phase {PhaseId}.", id);
         return Ok(response);
     }
 
@@ -78,7 +78,81 @@ public class PhasesController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<CreatePhaseResponse>> CreatePhase([FromBody] CreatePhaseRequest req)
     {
-        // WRITE LOGIC HERE
-        return Ok();
+
+        // Create new phase
+        var newPhase = new Phase
+        {
+            MissionId = req.MissionId,
+            Name = req.Name,
+            Description = req.Description
+        };
+
+        // Save
+        _context.Phases.Add(newPhase);
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Phase {PhaseId} '{PhaseName}' created successfully.", newPhase.Id, newPhase.Name);
+
+        return CreatedAtAction(
+            nameof(GetPhaseById),
+            new { Id = newPhase.Id },
+            new CreatePhaseResponse
+            {
+                Id = newPhase.Id,
+                Name = newPhase.Name,
+                Description = newPhase.Description
+            }
+        );
+    }
+
+    // UPDATE: PUT
+    [HttpPut("{id:int}")]
+    [Authorize(Roles = "Manager")]
+    [EndpointSummary("Overwrites an existing phase record details.")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdatePhase(int id, [FromBody] PutPhaseRequest req)
+    {
+        // Search for phase
+        var phase = await _context.Phases.FirstOrDefaultAsync(p => p.Id == id);
+        if (phase == null)
+        {
+            _logger.LogWarning("Phase with ID: {PhaseId} was not found.", id);
+            return Problem(
+                detail: $"Phase with ID: {id} could not be located.",
+                statusCode: StatusCodes.Status404NotFound
+            );
+        }
+
+        // Update phase
+        phase.Name = req.Name;
+        phase.Description = req.Description;
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Successfully updated phase with ID: {PhaseId}.", id);
+        return NoContent();
+    }
+
+    // DELETE
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Manager")]
+    [EndpointSummary("Removes a phase asset from the database.")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeletePhase(int id)
+    {
+        var phase = await _context.Phases.FirstOrDefaultAsync(p => p.Id == id);
+
+        if (phase == null)
+        {
+            _logger.LogWarning("Phase with ID: {PhaseId} was not found.", id);
+            return Problem(
+                detail: $"Phase with ID: {id} could not be found.",
+                statusCode: StatusCodes.Status404NotFound
+            );
+        }
+
+        _context.Phases.Remove(phase);
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Successfully deleted phase with ID: {PhaseId}.", id);
+        return NoContent();
     }
 }

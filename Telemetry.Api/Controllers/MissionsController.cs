@@ -85,9 +85,9 @@ public class MissionsController : ControllerBase
 
         if (mission == null)
         {
-            _logger.LogWarning("Mission with ID {MissionId} was not found.", id);
+            _logger.LogWarning("Mission with ID: {MissionId} was not found.", id);
             return Problem(
-                detail: $"Mission with ID {id} could not be found.",
+                detail: $"Mission with ID: {id} could not be found.",
                 statusCode: StatusCodes.Status404NotFound
             );
         }
@@ -113,7 +113,7 @@ public class MissionsController : ControllerBase
             }).ToList()
         };
 
-        _logger.LogInformation("Successfully retrieved mission {MissionId}", id);
+        _logger.LogInformation("Successfully retrieved mission {MissionId}.", id);
         return Ok(response);
     }
 
@@ -129,9 +129,9 @@ public class MissionsController : ControllerBase
 
         if (mission == null)
         {
-            _logger.LogWarning("Mission with ID {MissionId} was not found.", id);
+            _logger.LogWarning("Mission with ID: {MissionId} was not found.", id);
             return Problem(
-                detail: "Target modification mission asset could not be located.",
+                detail: $"Mission with ID: {id} could not be found.",
                 statusCode: StatusCodes.Status404NotFound
             );
         }
@@ -140,14 +140,14 @@ public class MissionsController : ControllerBase
         mission.Description = req.Description;
 
         await _context.SaveChangesAsync();
-        _logger.LogInformation("Successfully updated mission {MissionId}", id);
+        _logger.LogInformation("Successfully updated mission with ID: {MissionId}.", id);
         return NoContent();
     }
 
     // DELETE
     [HttpDelete("{id:int}")]
     [Authorize(Roles = "Manager")]
-    [EndpointSummary("Removes a mission asset from the database tracking schemas.")]
+    [EndpointSummary("Removes a mission asset from the database.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteMission(int id)
@@ -156,16 +156,16 @@ public class MissionsController : ControllerBase
 
         if (mission == null)
         {
-            _logger.LogWarning("Mission with ID {MissionId} was not found.", id);
+            _logger.LogWarning("Mission with ID: {MissionId} was not found.", id);
             return Problem(
-                detail: "Target deletion mission asset could not be located.",
+                detail: $"Mission with ID: {id} could not be found.",
                 statusCode: StatusCodes.Status404NotFound
             );
         }
 
         _context.Missions.Remove(mission);
         await _context.SaveChangesAsync();
-        _logger.LogInformation("Successfully deleted mission {MissionId}", id);
+        _logger.LogInformation("Successfully deleted mission with ID: {MissionId}.", id);
         return NoContent();
     }
 }
