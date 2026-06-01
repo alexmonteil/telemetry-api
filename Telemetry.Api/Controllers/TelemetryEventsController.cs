@@ -68,6 +68,13 @@ public class TelemetryEventsController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<CreateMissionResponse>> CreateTelemetryEvent([FromBody] CreateTelemetryEventRequest req)
     {
+        var phaseExists = _context.Phases.Any(p => p.Id == req.PhaseId);
+
+        if (!phaseExists)
+        {
+            return BadRequest();
+        }
+
         var newEvent = new TelemetryEvent
         {
             PhaseId = req.PhaseId,

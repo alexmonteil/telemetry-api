@@ -78,6 +78,12 @@ public class PhasesController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<CreatePhaseResponse>> CreatePhase([FromBody] CreatePhaseRequest req)
     {
+        var missionExists = _context.Missions.Any(m => m.Id == req.MissionId);
+
+        if (!missionExists)
+        {
+            return BadRequest();
+        }
 
         // Create new phase
         var newPhase = new Phase
