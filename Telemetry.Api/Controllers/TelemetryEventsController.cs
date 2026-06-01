@@ -2,6 +2,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using Org.BouncyCastle.Asn1.Cmp;
+using Org.BouncyCastle.Asn1.Iana;
+
 public class TelemetryEventsController : ControllerBase
 {
     private readonly TelemetryDbContext _context;
@@ -72,7 +75,11 @@ public class TelemetryEventsController : ControllerBase
 
         if (!phaseExists)
         {
-            return BadRequest();
+            _logger.LogWarning("Bad request attempting to insert telemetry event, no phase with ID: {PhaseId} exists.", req.PhaseId);
+            return Problem(
+                detail: $"Phase with ID: {req.PhaseId} does not exist.",
+                statusCode: StatusCodes.Status400BadRequest
+            );
         }
 
         var newEvent = new TelemetryEvent
@@ -100,7 +107,58 @@ public class TelemetryEventsController : ControllerBase
     }
 
     // UPDATE
+    [HttpPut("{id:int}")]
+    [Authorize]
+    [EndpointSummary("Overwrites an existing telemetry event record details.")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateTelemetryEvent(int id, [FromBody] UpdateTelemetryEventRequest req)
+    {
+        // Check if event exists
+        var telEvent = await _context.TelemetryEvents
+                        .FirstOrDefaultAsync(te => te.Id == id);
+
+        if (telEvent == null)
+        {
+            _logger.LogWarning("Telemetry event with ID: {TelemetryEventId} was not found.", id);
+            return Problem(
+                detail: $"Telemetry event with ID: {id} could not be found.",
+                statusCode: StatusCodes.Status404NotFound
+            );
+        }
+
+        // Update record
+        telEvent.Description = req.Description;
+        telEvent.Status = req.Status;
+
+        // Save
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Successfully updated telemetry event with ID: {TelemetryEventId}.", id);
+        return NoContent();
+    }
 
     // DELETE
+    [HttpDelete("{id:int}")]
+    [Authorize]
+    [EndpointSummary("Removes a telemetry event asset from the database.")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeletePhase(int id)
+    {
+        var telEvent = await _context.TelemetryEvents.FirstOrDefaultAsync(te => te.Id == id);
 
+        if (telEvent == null)
+        {
+            _logger.LogWarning("Telemetry event with ID: {TelemetryEventId} was not found.", id);
+            return Problem(
+                detail: $"Telemetry event with ID: {id} could not be found.",
+                statusCode: StatusCodes.Status404NotFound
+            );
+        }
+
+        _context.TelemetryEvents.Remove(telEvent);
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Successfully deleted telemetry event with ID: {TelemetryEventId}.", id);
+        return NoContent();
+    }
 }

@@ -82,7 +82,11 @@ public class PhasesController : ControllerBase
 
         if (!missionExists)
         {
-            return BadRequest();
+            _logger.LogWarning("Bad request attempting to insert phase, no mission with ID: {PhaseId} exists.", req.MissionId);
+            return Problem(
+                detail: $"Mission with ID: {req.MissionId} does not exist.",
+                statusCode: StatusCodes.Status400BadRequest
+            );
         }
 
         // Create new phase

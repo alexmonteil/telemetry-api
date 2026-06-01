@@ -9,6 +9,12 @@ public record CreateTelemetryEventRequest
     public required string Description { get; init; }
 }
 
+public record UpdateTelemetryEventRequest
+{
+    [MaxLength(256, ErrorMessage = "Description cannot exceed 256 characters.")]
+    public required string Description { get; init; }
+    public required EventStatus Status { get; init; }
+}
 
 // OUTPUT CONTRACTS (Responses)
 
