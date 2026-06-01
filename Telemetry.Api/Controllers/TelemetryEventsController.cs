@@ -2,8 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-using Org.BouncyCastle.Asn1.Cmp;
-using Org.BouncyCastle.Asn1.Iana;
 
 public class TelemetryEventsController : ControllerBase
 {
