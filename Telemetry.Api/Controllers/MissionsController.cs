@@ -76,12 +76,22 @@ public class MissionsController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<GetMissionResponse>> GetMissionById(int id)
     {
+        var nameIdentifierClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+        if (string.IsNullOrEmpty(nameIdentifierClaim) || string.IsNullOrEmpty(roleClaim) || !int.TryParse(nameIdentifierClaim, out int authenticatedUserId))
+        {
+            return Problem(detail: "Invalid identity claims signature.", statusCode: StatusCodes.Status401Unauthorized);
+        }
+
         var mission = await _context.Missions
             .Include(m => m.Phases)
             .Include(m => m.Leader)
             .Include(m => m.TeamMembers)
                 .ThenInclude(tm => tm.User)
-            .FirstOrDefaultAsync(m => m.Id == id);
+            .FirstOrDefaultAsync(m => m.Id == id &&
+            (m.LeaderId == authenticatedUserId ||
+            roleClaim == UserRole.Manager.ToString() ||
+            m.TeamMembers.Any(tm => tm.UserId == authenticatedUserId)));
 
         if (mission == null)
         {

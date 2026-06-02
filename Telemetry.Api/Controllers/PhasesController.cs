@@ -27,9 +27,10 @@ public class PhasesController : ControllerBase
     public async Task<ActionResult<GetPhaseResponse>> GetPhaseById(int id)
     {
         var nameIdentifierClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(nameIdentifierClaim) || !int.TryParse(nameIdentifierClaim, out int authenticatedUserId))
+        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+        if (string.IsNullOrEmpty(nameIdentifierClaim) || string.IsNullOrEmpty(roleClaim) || !int.TryParse(nameIdentifierClaim, out int authenticatedUserId))
         {
-            return Problem(detail: "Invalid identity claims signature.", statusCode: 401);
+            return Problem(detail: "Invalid identity claims signature.", statusCode: StatusCodes.Status401Unauthorized);
         }
 
         var phase = await _context.Phases
@@ -38,11 +39,12 @@ public class PhasesController : ControllerBase
             .Include(p => p.TelemetryEvents)
             .FirstOrDefaultAsync(p => p.Id == id &&
                 (p.Mission.LeaderId == authenticatedUserId ||
+                 roleClaim == UserRole.Manager.ToString() ||
                  p.Mission.TeamMembers.Any(tm => tm.UserId == authenticatedUserId)));
 
         if (phase == null)
         {
-            return Problem(detail: $"Phase with ID {id} could not be found.", statusCode: 404);
+            return Problem(detail: $"Phase with ID {id} could not be found.", statusCode: StatusCodes.Status404NotFound);
         }
 
         // Map phase to dto

@@ -1,3 +1,5 @@
+using System.Security.Claims;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -23,11 +25,22 @@ public class TelemetryEventsController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<GetTelemetryEventResponse>> GetTelemetryEventById(int id)
     {
+        var nameIdentifierClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+        if (string.IsNullOrEmpty(nameIdentifierClaim) || string.IsNullOrEmpty(roleClaim) || !int.TryParse(nameIdentifierClaim, out int authenticatedUserId))
+        {
+            return Problem(detail: "Invalid identity claims signature.", statusCode: StatusCodes.Status401Unauthorized);
+        }
 
         var telEvent = await _context.TelemetryEvents
                 .Include(te => te.Phase)
+                    .ThenInclude(p => p.Mission)
+                        .ThenInclude(m => m.TeamMembers)
                 .Include(te => te.Assignee)
-                .FirstOrDefaultAsync(te => te.Id == id);
+                .FirstOrDefaultAsync(te => te.Id == id &&
+                (te.Phase.Mission.LeaderId == authenticatedUserId ||
+                roleClaim == UserRole.Manager.ToString() ||
+                te.Phase.Mission.TeamMembers.Any(tm => tm.UserId == authenticatedUserId)));
 
         if (telEvent == null)
         {
@@ -69,7 +82,20 @@ public class TelemetryEventsController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<CreateMissionResponse>> CreateTelemetryEvent([FromBody] CreateTelemetryEventRequest req)
     {
-        var phaseExists = _context.Phases.Any(p => p.Id == req.PhaseId);
+        var nameIdentifierClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+        if (string.IsNullOrEmpty(nameIdentifierClaim) || string.IsNullOrEmpty(roleClaim) || !int.TryParse(nameIdentifierClaim, out int authenticatedUserId))
+        {
+            return Problem(detail: "Invalid identity claims signature.", statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        var phaseExists = _context.Phases
+            .Include(p => p.Mission)
+                .ThenInclude(m => m.TeamMembers)
+            .Any(p => p.Id == req.PhaseId &&
+            (p.Mission.LeaderId == authenticatedUserId ||
+            roleClaim == UserRole.Manager.ToString() ||
+            p.Mission.TeamMembers.Any(tm => tm.UserId == authenticatedUserId)));
 
         if (!phaseExists)
         {
@@ -112,9 +138,22 @@ public class TelemetryEventsController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateTelemetryEvent(int id, [FromBody] UpdateTelemetryEventRequest req)
     {
+        var nameIdentifierClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+        if (string.IsNullOrEmpty(nameIdentifierClaim) || string.IsNullOrEmpty(roleClaim) || !int.TryParse(nameIdentifierClaim, out int authenticatedUserId))
+        {
+            return Problem(detail: "Invalid identity claims signature.", statusCode: StatusCodes.Status401Unauthorized);
+        }
+
         // Check if event exists
         var telEvent = await _context.TelemetryEvents
-                        .FirstOrDefaultAsync(te => te.Id == id);
+                        .Include(te => te.Phase)
+                            .ThenInclude(p => p.Mission)
+                                .ThenInclude(m => m.TeamMembers)
+                        .FirstOrDefaultAsync(te => te.Id == id &&
+                        (te.Phase.Mission.LeaderId == authenticatedUserId ||
+                        roleClaim == UserRole.Manager.ToString() ||
+                        te.Phase.Mission.TeamMembers.Any(tm => tm.UserId == authenticatedUserId)));
 
         if (telEvent == null)
         {
@@ -143,7 +182,22 @@ public class TelemetryEventsController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeletePhase(int id)
     {
-        var telEvent = await _context.TelemetryEvents.FirstOrDefaultAsync(te => te.Id == id);
+        var nameIdentifierClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+        if (string.IsNullOrEmpty(nameIdentifierClaim) || string.IsNullOrEmpty(roleClaim) || !int.TryParse(nameIdentifierClaim, out int authenticatedUserId))
+        {
+            return Problem(detail: "Invalid identity claims signature.", statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        // Check if event exists
+        var telEvent = await _context.TelemetryEvents
+                        .Include(te => te.Phase)
+                            .ThenInclude(p => p.Mission)
+                                .ThenInclude(m => m.TeamMembers)
+                        .FirstOrDefaultAsync(te => te.Id == id &&
+                        (te.Phase.Mission.LeaderId == authenticatedUserId ||
+                        roleClaim == UserRole.Manager.ToString() ||
+                        te.Phase.Mission.TeamMembers.Any(tm => tm.UserId == authenticatedUserId)));
 
         if (telEvent == null)
         {
