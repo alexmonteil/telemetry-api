@@ -98,7 +98,13 @@ try
     if (app.Environment.IsDevelopment())
     {
         app.MapOpenApi();
-        app.MapScalarApiReference();
+        app.MapScalarApiReference(options =>
+        {
+            options.Authentication = new ScalarAuthenticationOptions
+            {
+                PreferredSecuritySchemes = ["Bearer"]
+            };
+        });
 
         // Execute Database Seeding 
         using (var scope = app.Services.CreateScope())
@@ -118,7 +124,7 @@ try
 }
 catch (Exception ex)
 {
-    if (ex is Microsoft.Extensions.Hosting.HostAbortedException)
+    if (ex is HostAbortedException)
     {
         throw; // Let EF Core handle its design-time shutdown process cleanly
     }
