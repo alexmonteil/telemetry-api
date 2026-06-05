@@ -10,11 +10,13 @@ public class PhasesController : ControllerBase
 {
     private readonly TelemetryDbContext _context;
     private readonly ILogger<PhasesController> _logger;
+    private readonly IAuthorizationService _authorizationService;
 
-    public PhasesController(TelemetryDbContext context, ILogger<PhasesController> logger)
+    public PhasesController(TelemetryDbContext context, ILogger<PhasesController> logger, IAuthorizationService authorizationService)
     {
         _context = context;
         _logger = logger;
+        _authorizationService = authorizationService;
     }
 
     // READ
@@ -23,30 +25,27 @@ public class PhasesController : ControllerBase
     [EndpointSummary("Retrieves an existing phase record details if it exists.")]
     [ProducesResponseType(typeof(GetPhaseResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<GetPhaseResponse>> GetPhaseById(int id)
     {
-        var nameIdentifierClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
-        if (string.IsNullOrEmpty(nameIdentifierClaim) || string.IsNullOrEmpty(roleClaim) || !int.TryParse(nameIdentifierClaim, out int authenticatedUserId))
-        {
-            return Problem(detail: "Invalid identity claims signature.", statusCode: StatusCodes.Status401Unauthorized);
-        }
-
         var phase = await _context.Phases
             .Include(p => p.Mission)
                 .ThenInclude(m => m.TeamMembers)
             .Include(p => p.Mission)
                 .ThenInclude(m => m.Leader)
             .Include(p => p.TelemetryEvents)
-            .FirstOrDefaultAsync(p => p.Id == id &&
-                (p.Mission.LeaderId == authenticatedUserId ||
-                 roleClaim == UserRole.Manager.ToString() ||
-                 p.Mission.TeamMembers.Any(tm => tm.UserId == authenticatedUserId)));
+            .FirstOrDefaultAsync(p => p.Id == id);
 
         if (phase == null)
         {
             return Problem(detail: $"Phase with ID {id} could not be found.", statusCode: StatusCodes.Status404NotFound);
+        }
+
+        var authResult = await _authorizationService.AuthorizeAsync(User, phase.Mission, "MissionAccessPolicy");
+        if (!authResult.Succeeded)
+        {
+            return Forbid();
         }
 
         // Map phase to dto

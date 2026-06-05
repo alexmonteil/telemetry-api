@@ -1,6 +1,7 @@
 using System.Text;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -67,6 +68,14 @@ try
     var connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPass}";
 
     builder.Services.AddDbContext<TelemetryDbContext>(options => options.UseNpgsql(connectionString));
+
+    // Register Custom Authorization Handlers & Policies
+    builder.Services.AddSingleton<IAuthorizationHandler, MissionAccessHandler>();
+    builder.Services.AddAuthorization(options =>
+    {
+        options.AddPolicy("MissionAccessPolicy", policy => policy.Requirements.Add(new MissionAccessRequirement()));
+    });
+
     builder.Services.AddControllers();
     builder.Services.AddOpenApi();
 

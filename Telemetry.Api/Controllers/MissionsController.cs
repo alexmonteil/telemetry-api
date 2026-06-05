@@ -10,11 +10,13 @@ public class MissionsController : ControllerBase
 {
     private readonly TelemetryDbContext _context;
     private readonly ILogger<MissionsController> _logger;
+    private readonly IAuthorizationService _authorizationService;
 
-    public MissionsController(TelemetryDbContext telemetryDbContext, ILogger<MissionsController> logger)
+    public MissionsController(TelemetryDbContext telemetryDbContext, ILogger<MissionsController> logger, IAuthorizationService authorizationService)
     {
         _context = telemetryDbContext;
         _logger = logger;
+        _authorizationService = authorizationService;
     }
 
     // CREATE
@@ -73,25 +75,16 @@ public class MissionsController : ControllerBase
     [Authorize]
     [EndpointSummary("Retrieves a single mission asset specification if it exists.")]
     [ProducesResponseType(typeof(GetMissionResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<GetMissionResponse>> GetMissionById(int id)
     {
-        var nameIdentifierClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
-        if (string.IsNullOrEmpty(nameIdentifierClaim) || string.IsNullOrEmpty(roleClaim) || !int.TryParse(nameIdentifierClaim, out int authenticatedUserId))
-        {
-            return Problem(detail: "Invalid identity claims signature.", statusCode: StatusCodes.Status401Unauthorized);
-        }
-
         var mission = await _context.Missions
             .Include(m => m.Phases)
             .Include(m => m.Leader)
             .Include(m => m.TeamMembers)
                 .ThenInclude(tm => tm.User)
-            .FirstOrDefaultAsync(m => m.Id == id &&
-            (m.LeaderId == authenticatedUserId ||
-            roleClaim == UserRole.Manager.ToString() ||
-            m.TeamMembers.Any(tm => tm.UserId == authenticatedUserId)));
+            .FirstOrDefaultAsync(m => m.Id == id);
 
         if (mission == null)
         {
@@ -100,6 +93,12 @@ public class MissionsController : ControllerBase
                 detail: $"Mission with ID: {id} could not be found.",
                 statusCode: StatusCodes.Status404NotFound
             );
+        }
+
+        var authResult = await _authorizationService.AuthorizeAsync(User, mission, "MissionAccessPolicy");
+        if (!authResult.Succeeded)
+        {
+            return Forbid();
         }
 
         var response = new GetMissionResponse
