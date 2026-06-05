@@ -89,10 +89,10 @@ public class TelemetryEventsController : ControllerBase
             return Problem(detail: "Invalid identity claims signature.", statusCode: StatusCodes.Status401Unauthorized);
         }
 
-        var phaseExists = _context.Phases
+        var phaseExists = await _context.Phases
             .Include(p => p.Mission)
                 .ThenInclude(m => m.TeamMembers)
-            .Any(p => p.Id == req.PhaseId &&
+            .AnyAsync(p => p.Id == req.PhaseId &&
             (p.Mission.LeaderId == authenticatedUserId ||
             roleClaim == UserRole.Manager.ToString() ||
             p.Mission.TeamMembers.Any(tm => tm.UserId == authenticatedUserId)));
@@ -115,7 +115,7 @@ public class TelemetryEventsController : ControllerBase
         _context.TelemetryEvents.Add(newEvent);
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Mission {MissionId} created successfully.", newEvent.Id);
+        _logger.LogInformation("Telemetry event {TelemetryEventId} created successfully.", newEvent.Id);
 
         return CreatedAtAction(
             nameof(GetTelemetryEventById),
@@ -180,7 +180,7 @@ public class TelemetryEventsController : ControllerBase
     [EndpointSummary("Removes a telemetry event asset from the database.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeletePhase(int id)
+    public async Task<IActionResult> DeleteTelemetryEvent(int id)
     {
         var nameIdentifierClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;

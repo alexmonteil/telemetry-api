@@ -30,7 +30,7 @@ public record GetMissionResponse
     public required string Name { get; init; }
     public required string Description { get; init; }
     public DateTime CreatedAt { get; init; }
-    public required User Leader { get; init; }
+    public required UserSummary Leader { get; init; }
     public List<PhaseSummary> Phases { get; init; } = [];
     public List<UserSummary> TeamMembers { get; init; } = [];
 }

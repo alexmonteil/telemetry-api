@@ -108,7 +108,12 @@ public class MissionsController : ControllerBase
             Name = mission.Name,
             Description = mission.Description ?? string.Empty,
             CreatedAt = mission.CreatedAt,
-            Leader = mission.Leader,
+            Leader = new UserSummary
+            {
+                UserId = mission.Leader.Id,
+                Username = mission.Leader.Username,
+                AvatarUrl = mission.Leader.AvatarUrl
+            },
             Phases = mission.Phases.Select(p => new PhaseSummary
             {
                 Id = p.Id,

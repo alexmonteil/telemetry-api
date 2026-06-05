@@ -35,6 +35,8 @@ public class PhasesController : ControllerBase
 
         var phase = await _context.Phases
             .Include(p => p.Mission)
+                .ThenInclude(m => m.TeamMembers)
+            .Include(p => p.Mission)
                 .ThenInclude(m => m.Leader)
             .Include(p => p.TelemetryEvents)
             .FirstOrDefaultAsync(p => p.Id == id &&
@@ -80,7 +82,7 @@ public class PhasesController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<CreatePhaseResponse>> CreatePhase([FromBody] CreatePhaseRequest req)
     {
-        var missionExists = _context.Missions.Any(m => m.Id == req.MissionId);
+        var missionExists = await _context.Missions.AnyAsync(m => m.Id == req.MissionId);
 
         if (!missionExists)
         {
