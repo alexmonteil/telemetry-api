@@ -77,6 +77,9 @@ try
     });
 
     builder.Services.AddControllers();
+
+    // Register DatabaseSeeder as a scoped service
+    builder.Services.AddScoped<DatabaseSeeder>();
     builder.Services.AddOpenApi();
 
     // Register the custom Global Exception Handler
@@ -93,6 +96,14 @@ try
     if (app.Environment.IsDevelopment())
     {
         app.MapOpenApi();
+
+        // Execute Database Seeding 
+        using (var scope = app.Services.CreateScope())
+        {
+            var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
+            // Blocks the startup pipeline intentionally until data is seeded
+            seeder.SeedAsync().GetAwaiter().GetResult();
+        }
     }
 
     app.UseHttpsRedirection();
