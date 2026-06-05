@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
+using Scalar.AspNetCore;
+
 using Serilog;
 
 DotNetEnv.Env.TraversePath().Load();
@@ -96,6 +98,7 @@ try
     if (app.Environment.IsDevelopment())
     {
         app.MapOpenApi();
+        app.MapScalarApiReference();
 
         // Execute Database Seeding 
         using (var scope = app.Services.CreateScope())
@@ -115,6 +118,10 @@ try
 }
 catch (Exception ex)
 {
+    if (ex is Microsoft.Extensions.Hosting.HostAbortedException)
+    {
+        throw; // Let EF Core handle its design-time shutdown process cleanly
+    }
     Log.Fatal(ex, "The application host terminated unexpectedly during initialization.");
 }
 finally
