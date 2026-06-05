@@ -82,7 +82,7 @@ try
 
     // Register DatabaseSeeder as a scoped service
     builder.Services.AddScoped<DatabaseSeeder>();
-    builder.Services.AddOpenApi();
+    builder.Services.AddOpenApiWithSecurity();
 
     // Register the custom Global Exception Handler
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
