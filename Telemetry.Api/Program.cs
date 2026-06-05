@@ -7,7 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 
 using Serilog;
 
-DotNetEnv.Env.Load();
+DotNetEnv.Env.TraversePath().Load();
 
 // 1. Initialize Logger Early
 Log.Logger = new LoggerConfiguration()
@@ -59,8 +59,8 @@ try
     });
 
     // Build DB Connection String
-    var dbHost = "localhost";
-    var dbPort = "5432";
+    var dbHost = Environment.GetEnvironmentVariable("DB_HOST") ?? "localhost";
+    var dbPort = Environment.GetEnvironmentVariable("DB_PORT") ?? "5432";
     var dbName = Environment.GetEnvironmentVariable("DB_NAME") ?? "enterprisedb";
     var dbUser = Environment.GetEnvironmentVariable("DB_USER") ?? "devuser";
     var dbPass = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "devpassword";
